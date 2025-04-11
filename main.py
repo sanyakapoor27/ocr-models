@@ -1,43 +1,26 @@
-from fastapi import FastAPI, File, UploadFile
-from paddleocr import PaddleOCR
-from fastapi.middleware.cors import CORSMiddleware
-import uvicorn
-import shutil
-import os
+from fastapi import FastAPI, UploadFile, File, Form
+from fastapi.responses import JSONResponse
+from PIL import Image
+import pytesseract
+import io
 
 app = FastAPI()
 
-# CORS for Express JS
-app.add_middleware(
-    CORSMiddleware,
-    allow_origins=["*"],  
-    allow_credentials=True,
-    allow_methods=["*"],
-    allow_headers=["*"],
-)
+# Health check
+@app.get("/")
+async def root():
+    return {"message": "OCR API running"}
 
-# Load models
-ocr_models = {
-    'en': PaddleOCR(use_angle_cls=True, lang='en'),
-    'devanagari': PaddleOCR(use_angle_cls=True, lang='devanagari'),
-}
-
+# OCR Endpoint
 @app.post("/ocr/")
-async def ocr_scan(lang: str, file: UploadFile = File(...)):
-    if lang not in ocr_models:
-        return {"error": "Unsupported language"}
+async def ocr_image(file: UploadFile = File(...), lang: str = Form(...)):
+    contents = await file.read()
+    image = Image.open(io.BytesIO(contents))
 
-    temp_file = f"temp_{file.filename}"
-    with open(temp_file, "wb") as buffer:
-        shutil.copyfileobj(file.file, buffer)
+    # OCR Processing
+    try:
+        text = pytesseract.image_to_string(image, lang=lang)
+    except pytesseract.TesseractError as e:
+        return JSONResponse(status_code=500, content={"error": str(e)})
 
-    result = ocr_models[lang].ocr(temp_file, cls=True)
-
-    os.remove(temp_file)
-
-    extracted_text = ""
-    for line in result:
-        for word in line:
-            extracted_text += word[1][0] + " "
-
-    return {"text": extracted_text.strip()}
+    return {"text": text}
