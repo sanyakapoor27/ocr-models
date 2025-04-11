@@ -1,0 +1,6 @@
+fastapi
+uvicorn
+paddleocr
+paddlepaddle==2.5.0
+shutil
+python-multipart
